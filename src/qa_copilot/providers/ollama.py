@@ -75,8 +75,8 @@ class OllamaProvider(Provider):
         }
         st = self.last_stats
         log.info("ollama[%s]: load %.1fs | prompt %d tok in %.1fs | generated %d tok in %.1fs "
-                 "(%.1f tok/s) | total %.1fs", self.last_mode, st["load_s"], st["prompt_tokens"], st["prompt_s"],
-                 gen, gen_s, st["gen_tps"], st["total_s"])
+                 "(%.1f tok/s) | total %.1fs", self.last_mode, st["load_s"],
+                 st["prompt_tokens"], st["prompt_s"], gen, gen_s, st["gen_tps"], st["total_s"])
 
     def health(self) -> tuple[bool, str]:
         try:
