@@ -57,6 +57,18 @@ def _text(value: Any, default: str = "") -> str:
     return str(value).strip() or default
 
 
+def _parse_priority(value: Any) -> "Priority":
+    return Priority.parse(value)
+
+
+def _parse_category(value: Any) -> "Category":
+    return Category.parse(value)
+
+
+def _to_text(value: Any) -> str:
+    return _text(value)
+
+
 class Finding(BaseModel):
     """A gap, ambiguity or conflict discovered in a requirement."""
 
@@ -69,8 +81,8 @@ class Finding(BaseModel):
     priority: Priority = Priority.MEDIUM
 
     _clean = field_validator("id", "title", "observation", "business_impact", "qa_impact",
-                             mode="before")(lambda v: _text(v))
-    _prio = field_validator("priority", mode="before")(Priority.parse)
+                             mode="before")(_to_text)
+    _prio = field_validator("priority", mode="before")(_parse_priority)
 
 
 class Question(BaseModel):
@@ -82,8 +94,8 @@ class Question(BaseModel):
     related_finding_ids: list[str] = Field(default_factory=list)
 
     _clean = field_validator("id", "question", "why_it_matters", "related_area",
-                             mode="before")(lambda v: _text(v))
-    _prio = field_validator("priority", mode="before")(Priority.parse)
+                             mode="before")(_to_text)
+    _prio = field_validator("priority", mode="before")(_parse_priority)
 
     @field_validator("related_finding_ids", mode="before")
     @classmethod
@@ -99,7 +111,7 @@ class Dependency(BaseModel):
     interface: str = ""
     qa_considerations: str = ""
 
-    _clean = field_validator("*", mode="before")(lambda v: _text(v))
+    _clean = field_validator("*", mode="before")(_to_text)
 
 
 class Risk(BaseModel):
@@ -166,8 +178,8 @@ class TestCase(BaseModel):
     automatable: bool = True
     traces_to: list[str] = Field(default_factory=list)  # acceptance-criteria / finding ids
 
-    _cat = field_validator("category", mode="before")(Category.parse)
-    _prio = field_validator("priority", mode="before")(Priority.parse)
+    _cat = field_validator("category", mode="before")(_parse_category)
+    _prio = field_validator("priority", mode="before")(_parse_priority)
 
     @field_validator("scenario", "area", "preconditions", "test_data", "expected", mode="before")
     @classmethod
