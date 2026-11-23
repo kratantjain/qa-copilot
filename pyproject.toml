@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qa-copilot"
+version = "0.1.0"
+description = "AI copilot for QA: requirement analysis, test design, traceability and export - local or cloud LLMs."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Kratant" }]
+dependencies = ["pydantic>=2.5", "requests>=2.31", "openpyxl>=3.1"]
+
+[project.optional-dependencies]
+ui = ["nicegui>=2.0"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+qa-copilot = "qa_copilot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+per-file-ignores = { "src/qa_copilot/prompts.py" = ["E501"] }
