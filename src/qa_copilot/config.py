@@ -14,7 +14,9 @@ class Settings:
         default_factory=lambda: os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     timeout: int = field(default_factory=lambda: int(os.getenv("QA_COPILOT_TIMEOUT", "600")))
     temperature: float = 0.1
-    max_tokens: int = 4096
+    num_ctx: int = field(default_factory=lambda: int(os.getenv("QA_COPILOT_NUM_CTX", "4096")))
+    ollama_schema: bool = field(
+        default_factory=lambda: os.getenv("QA_COPILOT_OLLAMA_SCHEMA", "1") != "0")
     db_path: str = field(default_factory=lambda: os.getenv("QA_COPILOT_DB", ".qa_copilot/history.db"))
 
     DEFAULT_MODELS = {

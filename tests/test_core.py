@@ -216,3 +216,85 @@ def test_similar_but_distinct_cases_are_kept():
              case("Customer selects gift card for payment", "gift_card", "Select 'Gift Card'"),
              case("Customer selects credit card payment method", "credit_card", "Select 'Credit Card'")]
     assert [c.test_data for c in dedupe(cards)] == ["credit_card", "gift_card"]
+
+
+class _Resp:
+    def __init__(self, status=200, payload=None):
+        self.status_code, self._payload = status, payload or {
+            "message": {"content": "{}"}, "done_reason": "stop"}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            import requests
+            raise requests.HTTPError(f"{self.status_code}")
+
+    def json(self):
+        return self._payload
+
+
+def test_ollama_uses_schema_keep_alive_and_small_context(monkeypatch):
+    import requests
+
+    from qa_copilot.prompts import CASES_JSON_SCHEMA
+    from qa_copilot.providers.ollama import OllamaProvider
+    sent = []
+    monkeypatch.setattr(requests, "post", lambda url, json, timeout: sent.append(json) or _Resp())
+    OllamaProvider("m", num_ctx=4096).complete("sys", "hi", 512, CASES_JSON_SCHEMA)
+    body = sent[0]
+    assert body["format"] == CASES_JSON_SCHEMA
+    assert body["keep_alive"] == "30m" and body["options"]["num_ctx"] == 4096
+    assert body["options"]["num_predict"] == 512
+
+
+def test_ollama_falls_back_to_plain_json_when_schema_rejected(monkeypatch):
+    import requests
+
+    from qa_copilot.providers.ollama import OllamaProvider
+    sent = []
+
+    def fake_post(url, json, timeout):
+        sent.append(json["format"])
+        return _Resp(400) if isinstance(json["format"], dict) else _Resp()
+    monkeypatch.setattr(requests, "post", fake_post)
+    OllamaProvider("m").complete("s", "p", 100, {"type": "object"})
+    assert sent == [{"type": "object"}, "json"]
+    sent.clear()
+    OllamaProvider("m", use_schema=False).complete("s", "p", 100, {"type": "object"})
+    assert sent == ["json"]
+
+
+def test_schemas_are_valid_json_and_prompts_stay_compact():
+    from qa_copilot.prompts import ANALYSIS_JSON_SCHEMA, CASES_JSON_SCHEMA, analyze_prompt, generate_prompt
+    json.dumps(ANALYSIS_JSON_SCHEMA)
+    json.dumps(CASES_JSON_SCHEMA)
+    assert "test_cases" in CASES_JSON_SCHEMA["required"]
+    assert len(analyze_prompt(STORY, "General")) < 2200
+    assert len(generate_prompt(STORY, "General", {"Positive": 3}, "")) < 2600
+
+
+def test_engine_passes_schema_to_provider(provider):
+    seen = []
+    orig = provider.complete
+
+    def spy(system, prompt, max_tokens=2048, schema=None):
+        seen.append((max_tokens, schema))
+        return orig(system, prompt, max_tokens, schema)
+    provider.complete = spy
+    a = analyze(provider, STORY)
+    generate(provider, STORY, a)
+    assert all(schema is not None and tokens <= 2048 for tokens, schema in seen)
+
+
+def test_default_mix_is_small_and_batched(provider):
+    from qa_copilot.engine import BATCH_SIZE, DEFAULT_SPEC
+    assert sum(DEFAULT_SPEC.values()) == 12 and BATCH_SIZE == 6
+    generate(provider, STORY)
+    assert len(provider.calls) <= 3  # 12 cases -> two batches (+ at most one top-up)
+
+
+def test_long_story_rejected_for_local_model_only(provider):
+    from qa_copilot.providers.ollama import OllamaProvider
+    long_story = "x " * 4000
+    with pytest.raises(ValueError, match="Split it"):
+        analyze(OllamaProvider("m"), long_story)
+    analyze(provider, long_story)  # mock/cloud providers are not limited

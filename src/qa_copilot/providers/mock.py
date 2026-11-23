@@ -14,7 +14,8 @@ class MockProvider(Provider):
         self.responses = list(responses or [])
         self.calls: list[tuple[str, str]] = []
 
-    def complete(self, system: str, prompt: str, max_tokens: int = 4096) -> str:
+    def complete(self, system: str, prompt: str, max_tokens: int = 2048,
+                 schema: dict | None = None) -> str:
         self.calls.append((system, prompt))
         if self.responses:
             return self.responses.pop(0)

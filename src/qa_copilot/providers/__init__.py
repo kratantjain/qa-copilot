@@ -15,7 +15,8 @@ def get_provider(settings: Settings | None = None) -> Provider:
     kw = dict(timeout=s.timeout, temperature=s.temperature)
     model = s.resolved_model
     if s.provider == "ollama":
-        return OllamaProvider(model, base_url=s.ollama_url, **kw)
+        return OllamaProvider(model, base_url=s.ollama_url, num_ctx=s.num_ctx,
+                              use_schema=s.ollama_schema, **kw)
     if s.provider == "anthropic":
         return AnthropicProvider(model, **kw)
     if s.provider == "openai":

@@ -14,7 +14,8 @@ class AnthropicProvider(Provider):
         super().__init__(model, **kw)
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
 
-    def complete(self, system: str, prompt: str, max_tokens: int = 4096) -> str:
+    def complete(self, system: str, prompt: str, max_tokens: int = 2048,
+                 schema: dict | None = None) -> str:
         if not self.api_key:
             raise LLMError("ANTHROPIC_API_KEY is not set.")
         try:

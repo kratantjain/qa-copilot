@@ -17,26 +17,46 @@ from .models import (
     TestCase,
     pick,
 )
-from .prompts import SYSTEM, analyze_prompt, generate_prompt, reassess_prompt
+from .prompts import (
+    ANALYSIS_JSON_SCHEMA,
+    CASES_JSON_SCHEMA,
+    SYSTEM,
+    analyze_prompt,
+    generate_prompt,
+    reassess_prompt,
+)
 from .providers import LLMError, Provider
 
-DEFAULT_SPEC = {"Positive": 4, "Negative": 4, "Boundary": 3, "Edge Case": 3, "Regression": 3}
+DEFAULT_SPEC = {"Positive": 3, "Negative": 3, "Boundary": 2, "Edge Case": 2, "Regression": 2}
+ANALYSIS_TOKENS = 1536
+CASE_TOKENS = 2048
+BATCH_SIZE = 6  # test cases per LLM call
+MAX_LOCAL_STORY_CHARS = 6000  # keeps prompt + output inside a 4k context window
 DOMAINS = ("General", "E-commerce / Retail", "Payments / Fintech", "Healthcare", "Embedded / Devices",
            "API / Microservices", "Mobile", "Data / ETL")
 ProgressFn = Callable[[str], None]
 
 
-def _call(provider: Provider, prompt: str, max_tokens: int, retries: int = 1) -> dict:
+def _call(provider: Provider, prompt: str, max_tokens: int, retries: int = 1,
+          schema: dict | None = None) -> dict:
     """Call the LLM and parse JSON, retrying once with a repair hint."""
     last: Exception | None = None
     for attempt in range(retries + 1):
         p = prompt if attempt == 0 else prompt + "\n\nYour previous reply was not valid JSON. " \
             "Reply again with ONLY the JSON object."
         try:
-            return extract_json(provider.complete(SYSTEM, p, max_tokens))
+            return extract_json(provider.complete(SYSTEM, p, max_tokens, schema))
         except LLMError as e:
             last = e
     raise LLMError(str(last))
+
+
+def _check_length(provider: Provider, story: str) -> None:
+    if provider.name == "ollama" and len(story) > MAX_LOCAL_STORY_CHARS:
+        raise ValueError(
+            f"Requirement is {len(story)} characters; a local model handles about "
+            f"{MAX_LOCAL_STORY_CHARS}. Split it into sections (one feature at a time) or use a "
+            "larger-context provider.")
 
 
 def _findings(items, kind: str, prefix: str) -> list[Finding]:
@@ -101,7 +121,9 @@ def readiness(a: Analysis) -> tuple[int, str]:
 def analyze(provider: Provider, story: str, domain: str = "General") -> Analysis:
     if not story.strip():
         raise ValueError("Please enter a requirement or user story.")
-    d = _call(provider, analyze_prompt(story, domain), 4096)
+    _check_length(provider, story)
+    d = _call(provider, analyze_prompt(story, domain), ANALYSIS_TOKENS,
+              schema=ANALYSIS_JSON_SCHEMA)
     qs = _models(d.get("questions"), Question)
     for i, q in enumerate(qs, 1):
         q.id = q.id or f"Q-{i:03d}"
@@ -194,6 +216,7 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
     """Generate test cases category-by-batch so small local models stay within token limits."""
     if not story.strip():
         raise ValueError("Please enter a requirement or user story.")
+    _check_length(provider, story)
     spec = {k: v for k, v in (spec or DEFAULT_SPEC).items() if v > 0}
     if not spec:
         raise ValueError("Select at least one category.")
@@ -202,8 +225,8 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
         context = "\n".join(analysis.acceptance_criteria) + "\n" + "\n".join(
             f"{f.id}: {f.title}" for f in analysis.findings)
     batches, cur, size = [], {}, 0
-    for cat, n in spec.items():  # <=8 cases per LLM call
-        if cur and size + n > 8:
+    for cat, n in spec.items():  # <=BATCH_SIZE cases per LLM call
+        if cur and size + n > BATCH_SIZE:
             batches.append(cur)
             cur, size = {}, 0
         cur[cat] = n
@@ -215,7 +238,8 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
     for i, batch in enumerate(batches, 1):
         if progress:
             progress(f"Generating batch {i}/{len(batches)}: {', '.join(batch)}")
-        d = _call(provider, generate_prompt(story, domain, batch, context), 4096)
+        d = _call(provider, generate_prompt(story, domain, batch, context), CASE_TOKENS,
+                  schema=CASES_JSON_SCHEMA)
         for raw in d.get("test_cases") or []:
             if not isinstance(raw, dict):
                 raw = {"scenario": str(raw)}
@@ -240,7 +264,8 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
             progress(f"Top-up pass for: {', '.join(short)}")
         avoid = "\n".join(f"- {c.scenario}" for c in cases)
         try:
-            d = _call(provider, generate_prompt(story, domain, short, context, avoid), 4096)
+            d = _call(provider, generate_prompt(story, domain, short, context, avoid), CASE_TOKENS,
+                      schema=CASES_JSON_SCHEMA)
             for raw in d.get("test_cases") or []:
                 if isinstance(raw, dict) and (raw.get("scenario") or raw.get("title")):
                     raw = {**raw, "scenario": raw.get("scenario") or raw.get("title")}

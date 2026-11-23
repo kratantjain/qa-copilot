@@ -18,7 +18,8 @@ class OpenAICompatProvider(Provider):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
 
-    def complete(self, system: str, prompt: str, max_tokens: int = 4096) -> str:
+    def complete(self, system: str, prompt: str, max_tokens: int = 2048,
+                 schema: dict | None = None) -> str:
         headers = {"content-type": "application/json"}
         if self.api_key:
             headers["authorization"] = f"Bearer {self.api_key}"

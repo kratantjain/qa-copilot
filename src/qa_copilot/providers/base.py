@@ -16,8 +16,12 @@ class Provider(ABC):
         self.temperature = temperature
 
     @abstractmethod
-    def complete(self, system: str, prompt: str, max_tokens: int = 4096) -> str:
-        """Return the raw text completion (expected to contain JSON)."""
+    def complete(self, system: str, prompt: str, max_tokens: int = 2048,
+                 schema: dict | None = None) -> str:
+        """Return the raw text completion (expected to contain JSON).
+
+        ``schema`` is an optional JSON schema that providers may use to constrain output.
+        """
 
     def health(self) -> tuple[bool, str]:
         return True, "ok"

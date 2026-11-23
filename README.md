@@ -18,7 +18,7 @@ Built by **Kratant** - 7 years across QA automation, CI/CD orchestration and int
 - **Multi-provider LLMs:** Ollama (local), Anthropic, any OpenAI-compatible server, plus an offline mock for tests and demos.
 - **Exports:** Markdown report, CSV, Excel (4 sheets), Gherkin `.feature`, pytest skeleton, Jira/Xray CSV, JSON.
 - **Interfaces:** NiceGUI web UI and a CLI for CI pipelines. SQLite run history.
-- **Quality:** 29 tests, ruff, GitHub Actions CI, Dockerfile.
+- **Quality:** 35 tests, ruff, GitHub Actions CI, Dockerfile.
 
 ## How it works
 
@@ -92,7 +92,16 @@ cat story.txt | qa-copilot analyze --provider ollama --format json
 ## Configuration
 
 Environment variables (see `.env.example`): `QA_COPILOT_PROVIDER`, `QA_COPILOT_MODEL`, `OLLAMA_URL`,
-`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `QA_COPILOT_TIMEOUT`, `QA_COPILOT_DB`.
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `QA_COPILOT_TIMEOUT`, `QA_COPILOT_DB`, `QA_COPILOT_NUM_CTX` (Ollama context window, default 4096),
+`QA_COPILOT_OLLAMA_SCHEMA=0` (disable schema-constrained output).
+
+### Tips for small local models
+
+- Output is schema-constrained on Ollama, so the model cannot return broken JSON; if your Ollama
+  build rejects schemas the tool falls back to plain JSON mode automatically.
+- The model stays loaded between calls (`keep_alive`), prompts are compact and replies are capped.
+- The default mix is 12 cases in two calls. Raise it per category in the UI or with `--spec`.
+- Requirements over ~6000 characters are rejected for local models; test one feature at a time.
 
 ## Docker
 
@@ -119,7 +128,6 @@ spreadsheet formula injection from model output.
 
 ## Roadmap
 
-- Fewer model calls / tokens per run, configurable context size
 - Self-review pass that removes findings and test cases contradicting the requirement
 - GitHub Action to run on a story file in a pull request
 - Agent / MCP mode
