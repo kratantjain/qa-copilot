@@ -317,6 +317,7 @@ def test_ollama_logs_timings_and_engine_logs_calls(monkeypatch, caplog):
     text = caplog.text
     assert "LLM call ollama" in text and "LLM reply in" in text
     assert "160 tok in 10.0s (16.0 tok/s)" in text and "load 2.0s" in text
+    assert "ollama[json]" in text
     assert p.last_stats["gen_tps"] == 16.0
 
 
@@ -335,3 +336,14 @@ def test_schema_mode_is_opt_in(monkeypatch):
     assert Settings().ollama_schema is False
     monkeypatch.setenv("QA_COPILOT_OLLAMA_SCHEMA", "1")
     assert Settings().ollama_schema is True
+
+
+def test_backgrounded_browser_noise_is_filtered():
+    import logging
+
+    from qa_copilot.log import _QuietBackgroundedBrowser
+    f = _QuietBackgroundedBrowser()
+    noisy = logging.LogRecord("nicegui", logging.ERROR, "x", 1,
+                              "JavaScript did not respond within 1.0 s", None, None)
+    real = logging.LogRecord("qa_copilot", logging.ERROR, "x", 1, "job failed", None, None)
+    assert f.filter(noisy) is False and f.filter(real) is True

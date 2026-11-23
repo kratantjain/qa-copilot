@@ -44,8 +44,8 @@ def _call(provider: Provider, prompt: str, max_tokens: int, retries: int = 1,
     """Call the LLM and parse JSON, retrying once with a repair hint."""
     last: Exception | None = None
     for attempt in range(retries + 1):
-        log.info("LLM call %s (attempt %d): prompt %d chars, max %d tokens, schema=%s",
-                 provider.name, attempt + 1, len(prompt), max_tokens, bool(schema))
+        log.info("LLM call %s (attempt %d): prompt %d chars, max %d tokens",
+                 provider.name, attempt + 1, len(prompt), max_tokens)
         t0 = time.monotonic()
         p = prompt if attempt == 0 else prompt + "\n\nYour previous reply was not valid JSON. " \
             "Reply again with ONLY the JSON object."

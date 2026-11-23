@@ -17,6 +17,7 @@ class OllamaProvider(Provider):
         self.keep_alive = keep_alive
         self.use_schema = use_schema
         self.last_stats: dict = {}
+        self.last_mode = "json"
 
     def _post(self, system: str, prompt: str, max_tokens: int, fmt) -> requests.Response:
         return requests.post(
@@ -37,12 +38,14 @@ class OllamaProvider(Provider):
     def complete(self, system: str, prompt: str, max_tokens: int = 2048,
                  schema: dict | None = None) -> str:
         try:
-            r = self._post(system, prompt, max_tokens, schema if (schema and self.use_schema) else "json")
+            self.last_mode = "schema" if (schema and self.use_schema) else "json"
+            r = self._post(system, prompt, max_tokens, schema if self.last_mode == "schema" else "json")
             if r.status_code == 404:
                 raise LLMError(f"Model '{self.model}' not found on the Ollama server. "
                                f"Run: ollama pull {self.model}")
             if r.status_code in (400, 500) and schema and self.use_schema:
                 # Older/odd Ollama builds may reject schema-constrained output: fall back.
+                self.last_mode = "json (schema rejected)"
                 r = self._post(system, prompt, max_tokens, "json")
             r.raise_for_status()
             data = r.json()
@@ -71,8 +74,8 @@ class OllamaProvider(Provider):
             "total_s": data.get("total_duration", 0) / ns,
         }
         st = self.last_stats
-        log.info("ollama: load %.1fs | prompt %d tok in %.1fs | generated %d tok in %.1fs "
-                 "(%.1f tok/s) | total %.1fs", st["load_s"], st["prompt_tokens"], st["prompt_s"],
+        log.info("ollama[%s]: load %.1fs | prompt %d tok in %.1fs | generated %d tok in %.1fs "
+                 "(%.1f tok/s) | total %.1fs", self.last_mode, st["load_s"], st["prompt_tokens"], st["prompt_s"],
                  gen, gen_s, st["gen_tps"], st["total_s"])
 
     def health(self) -> tuple[bool, str]:
