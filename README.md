@@ -14,7 +14,7 @@ Built by **Kratant** - 7 years across QA automation, CI/CD orchestration and int
 - **Multi-provider LLMs:** Ollama (local), Anthropic, any OpenAI-compatible server, plus an offline mock for tests and demos.
 - **Exports:** Markdown report, CSV, Excel (4 sheets), Gherkin `.feature`, pytest skeleton, Jira/Xray CSV, JSON.
 - **Interfaces:** NiceGUI web UI and a CLI for CI pipelines. SQLite run history.
-- **Quality:** 22 tests, ruff, GitHub Actions CI, Dockerfile.
+- **Quality:** 23 tests, ruff, GitHub Actions CI, Dockerfile.
 
 ## Quick start
 
@@ -57,17 +57,6 @@ cat story.txt | qa-copilot analyze --provider ollama --format json
 3. **Generate** - test cases per category, traced to acceptance criteria.
 4. **Review** - coverage chips, traceability matrix, uncovered items.
 5. **Export** - drop into Excel, Jira/Xray, Cucumber or pytest.
-
-## Android (Termux)
-
-Only pure-Python dependencies are required for the CLI, so it installs on a phone:
-
-```bash
-pkg install python git
-git clone https://github.com/kratantjain/qa-copilot && cd qa-copilot
-pip install -e .
-qa-copilot run --provider anthropic --story "..." --format md,xlsx   # or OLLAMA_URL=<laptop>:11434
-```
 
 ## Configuration
 

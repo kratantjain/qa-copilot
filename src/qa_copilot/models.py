@@ -1,7 +1,7 @@
 """Typed data models shared by the engine, exporters, CLI and UI.
 
-Plain dataclasses (no third-party dependency) so the project installs anywhere,
-including Termux/Android where compiled packages such as pydantic-core are painful.
+Plain dataclasses (no third-party dependency) so the project installs anywhere
+without a compiler toolchain.
 Every model coerces untrusted LLM output in ``__post_init__``.
 """
 from __future__ import annotations

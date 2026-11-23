@@ -141,3 +141,14 @@ def test_cli_end_to_end(tmp_path, capsys):
     assert rc == 0
     assert (tmp_path / "qa_report.md").read_text().startswith("# QA Report")
     assert (tmp_path / "qa_report.xlsx").stat().st_size > 0
+
+
+def test_placeholder_text_is_filtered():
+    from qa_copilot.engine import is_placeholder
+    assert is_placeholder("AC-1: Testable, atomic criterion derived from the story")
+    assert not is_placeholder("AC-1: Order is created only after payment succeeds")
+    p = MockProvider(responses=['{"acceptance_criteria": ["AC-1: Testable, atomic criterion '
+                                'derived from the story", "Orders need payment"]}'])
+    a = analyze(p, STORY)
+    assert a.acceptance_criteria == ["AC-1: Orders need payment"]
+    assert a.readiness_score <= 100

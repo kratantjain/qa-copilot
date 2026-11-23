@@ -15,7 +15,7 @@ ANALYSIS_SCHEMA = """{
   "risks":       [{"description":"","likelihood":1-5,"impact":1-5,"mitigation":""}],
   "questions":   [{"id":"Q-001","question":"","why_it_matters":"","related_area":"","priority":"High","related_finding_ids":["GAP-001"]}],
   "assumptions": [""],
-  "acceptance_criteria": ["AC-1: testable, atomic criterion derived from the story"],
+  "acceptance_criteria": ["AC-1: <one atomic, testable criterion in your own words>"],
   "readiness_score": 0-100
 }"""
 
@@ -23,10 +23,10 @@ CASE_SCHEMA = """{
   "test_cases": [{
     "category": "Positive|Negative|Boundary|Edge Case|Regression|Security|Performance|Accessibility",
     "area": "feature area",
-    "scenario": "specific scenario",
+    "scenario": "<specific scenario for this requirement>",
     "preconditions": "", "test_data": "",
-    "steps": ["step 1", "step 2"],
-    "expected": "observable expected result",
+    "steps": ["<action 1>", "<action 2>"],
+    "expected": "<observable expected result>",
     "priority": "High|Medium|Low",
     "automatable": true,
     "traces_to": ["AC-1", "GAP-001"]
@@ -45,6 +45,12 @@ REQUIREMENT:
 Review the requirement like a QA lead. Find gaps, ambiguities, conflicts, external
 dependencies and risks (likelihood and impact on a 1-5 scale). Write atomic, testable
 acceptance criteria numbered AC-1, AC-2... Ask only questions whose answers change tests.
+Rules:
+- Angle-bracket text in the schema is a placeholder; replace it with real content, never copy it.
+- Never report as missing something the requirement already states.
+- Report a conflict ONLY when two statements in the requirement contradict each other;
+  otherwise return an empty "conflicts" list. Same for ambiguities: only real ones.
+- Write 3-6 acceptance criteria, each specific to this requirement.
 Return JSON with exactly this shape:
 {ANALYSIS_SCHEMA}"""
 
@@ -66,6 +72,9 @@ Generate test cases for ONLY these categories:
 Rules: distinct, executable cases; 2-5 steps each; concrete test data; observable expected
 results; set traces_to to the acceptance-criteria / finding ids each case verifies;
 automatable=false only when human judgement is required. Do not invent business rules.
+Always fill preconditions and test_data with concrete values. Negative cases must expect a
+rejection, error or blocked action - never a successful outcome. Boundary cases must name the
+boundary value. Angle-bracket text in the schema is a placeholder; never copy it.
 Return JSON with exactly this shape:
 {CASE_SCHEMA}"""
 

@@ -61,6 +61,15 @@ def _models(items, model):
     return out
 
 
+_PLACEHOLDERS = ("testable, atomic", "derived from the story", "specific scenario",
+                 "<one atomic", "<specific", "<action", "<observable", "short title")
+
+
+def is_placeholder(text: str) -> bool:
+    t = text.lower()
+    return any(p in t for p in _PLACEHOLDERS) or (t.startswith("<") and t.endswith(">"))
+
+
 def _strings(items) -> list[str]:
     if isinstance(items, str):
         items = [items]
@@ -88,7 +97,7 @@ def analyze(provider: Provider, story: str, domain: str = "General") -> Analysis
     qs = _models(d.get("questions"), Question)
     for i, q in enumerate(qs, 1):
         q.id = q.id or f"Q-{i:03d}"
-    acs = _strings(d.get("acceptance_criteria"))
+    acs = [a for a in _strings(d.get("acceptance_criteria")) if not is_placeholder(a)]
     acs = [a if a.upper().startswith("AC-") else f"AC-{i}: {a}" for i, a in enumerate(acs, 1)]
     a = Analysis(
         summary=str(d.get("summary", "")).strip(),
@@ -162,6 +171,8 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
             if not (raw.get("scenario") or raw.get("title")):
                 continue
             raw = {**raw, "scenario": raw.get("scenario") or raw.get("title")}
+            if is_placeholder(str(raw["scenario"])):
+                continue
             try:
                 cases.append(pick(TestCase, raw))
             except (TypeError, ValueError):
