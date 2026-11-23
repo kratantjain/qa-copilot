@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from typing import Callable
 
-from pydantic import ValidationError
-
 from .json_utils import extract_json
 from .models import (
     Analysis,
@@ -16,6 +14,7 @@ from .models import (
     Risk,
     Suite,
     TestCase,
+    pick,
 )
 from .prompts import SYSTEM, analyze_prompt, generate_prompt, reassess_prompt
 from .providers import LLMError, Provider
@@ -43,21 +42,21 @@ def _findings(items, kind: str, prefix: str) -> list[Finding]:
     out = []
     for i, raw in enumerate(items or [], 1):
         raw = raw if isinstance(raw, dict) else {"observation": str(raw)}
-        f = Finding(**{k: v for k, v in raw.items() if k in Finding.model_fields}, kind=kind)
+        f = pick(Finding, {**raw, "kind": kind})
         f.id = f.id or f"{prefix}-{i:03d}"
         f.title = f.title or "Requirement finding"
         out.append(f)
     return out
 
 
-def _models(items, model, **extra):
+def _models(items, model):
     out = []
     for raw in items or []:
         if not isinstance(raw, dict):
             raw = {"description": str(raw)} if model is Risk else {"question": str(raw)}
         try:
-            out.append(model(**{k: v for k, v in raw.items() if k in model.model_fields}, **extra))
-        except ValidationError:
+            out.append(pick(model, raw))
+        except (TypeError, ValueError):
             continue
     return out
 
@@ -164,8 +163,8 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
                 continue
             raw = {**raw, "scenario": raw.get("scenario") or raw.get("title")}
             try:
-                cases.append(TestCase(**{k: v for k, v in raw.items() if k in TestCase.model_fields}))
-            except ValidationError:
+                cases.append(pick(TestCase, raw))
+            except (TypeError, ValueError):
                 continue
         assumptions += _strings(d.get("assumptions"))
         gaps += _strings(d.get("gaps"))

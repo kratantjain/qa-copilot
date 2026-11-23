@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,9 +8,9 @@ version = "0.1.0"
 description = "AI copilot for QA: requirement analysis, test design, traceability and export - local or cloud LLMs."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "Kratant" }]
-dependencies = ["pydantic>=2.5", "requests>=2.31", "openpyxl>=3.1"]
+dependencies = ["requests>=2.31", "openpyxl>=3.1"]
 
 [project.optional-dependencies]
 ui = ["nicegui>=2.0"]

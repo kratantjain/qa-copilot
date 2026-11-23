@@ -5,7 +5,7 @@ import io
 import re
 
 from ..coverage import coverage_report, traceability
-from ..models import Analysis, Suite, TestCase
+from ..models import Analysis, Suite, TestCase, to_dict
 
 COLUMNS = ["ID", "Category", "Area", "Priority", "Scenario", "Preconditions", "Test data",
            "Steps", "Expected result", "Automatable", "Traces to"]
@@ -33,8 +33,8 @@ def to_csv(suite: Suite) -> str:
 
 def to_json(suite: Suite, analysis: Analysis | None = None) -> str:
     import json
-    return json.dumps({"analysis": analysis.model_dump(mode="json") if analysis else None,
-                       "suite": suite.model_dump(mode="json")}, indent=2)
+    return json.dumps({"analysis": to_dict(analysis) if analysis else None,
+                       "suite": to_dict(suite)}, indent=2)
 
 
 def to_markdown(suite: Suite, analysis: Analysis | None = None) -> str:

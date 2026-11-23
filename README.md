@@ -58,6 +58,17 @@ cat story.txt | qa-copilot analyze --provider ollama --format json
 4. **Review** - coverage chips, traceability matrix, uncovered items.
 5. **Export** - drop into Excel, Jira/Xray, Cucumber or pytest.
 
+## Android (Termux)
+
+Only pure-Python dependencies are required for the CLI, so it installs on a phone:
+
+```bash
+pkg install python git
+git clone https://github.com/kratantjain/qa-copilot && cd qa-copilot
+pip install -e .
+qa-copilot run --provider anthropic --story "..." --format md,xlsx   # or OLLAMA_URL=<laptop>:11434
+```
+
 ## Configuration
 
 Environment variables (see `.env.example`): `QA_COPILOT_PROVIDER`, `QA_COPILOT_MODEL`, `OLLAMA_URL`,

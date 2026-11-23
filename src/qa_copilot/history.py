@@ -5,7 +5,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .models import Analysis, Suite
+from .models import Analysis, Suite, to_dict
 
 
 class History:
@@ -23,8 +23,8 @@ class History:
         title = (story.strip().splitlines() or ["Untitled"])[0][:80]
         cur = self._conn.execute(
             "INSERT INTO runs(title, story, analysis, suite) VALUES (?,?,?,?)",
-            (title, story, analysis.model_dump_json() if analysis else None,
-             suite.model_dump_json() if suite else None))
+            (title, story, json.dumps(to_dict(analysis)) if analysis else None,
+             json.dumps(to_dict(suite)) if suite else None))
         self._conn.commit()
         return int(cur.lastrowid)
 
@@ -38,5 +38,5 @@ class History:
             "SELECT story, analysis, suite FROM runs WHERE id=?", (run_id,)).fetchone()
         if not row:
             raise KeyError(run_id)
-        return (row[0], Analysis(**json.loads(row[1])) if row[1] else None,
-                Suite(**json.loads(row[2])) if row[2] else None)
+        return (row[0], Analysis.from_dict(json.loads(row[1])) if row[1] else None,
+                Suite.from_dict(json.loads(row[2])) if row[2] else None)
