@@ -318,3 +318,12 @@ def test_ollama_logs_timings_and_engine_logs_calls(monkeypatch, caplog):
     assert "LLM call ollama" in text and "LLM reply in" in text
     assert "160 tok in 10.0s (16.0 tok/s)" in text and "load 2.0s" in text
     assert p.last_stats["gen_tps"] == 16.0
+
+
+def test_ollama_404_gives_actionable_message(monkeypatch):
+    import requests
+
+    from qa_copilot.providers.ollama import OllamaProvider
+    monkeypatch.setattr(requests, "post", lambda url, json, timeout: _Resp(404))
+    with pytest.raises(LLMError, match="ollama pull llama3.2:1b"):
+        OllamaProvider("llama3.2:1b").complete("s", "p")

@@ -38,6 +38,9 @@ class OllamaProvider(Provider):
                  schema: dict | None = None) -> str:
         try:
             r = self._post(system, prompt, max_tokens, schema if (schema and self.use_schema) else "json")
+            if r.status_code == 404:
+                raise LLMError(f"Model '{self.model}' not found on the Ollama server. "
+                               f"Run: ollama pull {self.model}")
             if r.status_code in (400, 500) and schema and self.use_schema:
                 # Older/odd Ollama builds may reject schema-constrained output: fall back.
                 r = self._post(system, prompt, max_tokens, "json")
