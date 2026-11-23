@@ -347,3 +347,20 @@ def test_backgrounded_browser_noise_is_filtered():
                               "JavaScript did not respond within 1.0 s", None, None)
     real = logging.LogRecord("qa_copilot", logging.ERROR, "x", 1, "job failed", None, None)
     assert f.filter(noisy) is False and f.filter(real) is True
+
+
+def test_self_contradictory_findings_are_dropped():
+    from qa_copilot.engine import is_self_contradictory
+    from qa_copilot.models import Finding
+    bad = Finding(observation="The requirement states the link expires in 15 minutes, but does "
+                              "not specify the expiration time.")
+    bad2 = Finding(observation="The requirement mentions a minimum of 8 characters with a number, "
+                               "but does not specify the password complexity.")
+    good = Finding(observation="The requirement does not specify what happens when the link expires.")
+    assert is_self_contradictory(bad) and is_self_contradictory(bad2)
+    assert not is_self_contradictory(good)
+    payload = {"gaps": [{"title": "A", "observation": bad.observation},
+                        {"title": "B", "observation": good.observation}]}
+    p = MockProvider(responses=[json.dumps(payload)])
+    a = analyze(p, STORY)
+    assert [g.title for g in a.gaps] == ["B"]

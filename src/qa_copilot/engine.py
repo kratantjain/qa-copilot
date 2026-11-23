@@ -105,6 +105,17 @@ def _strings(items) -> list[str]:
     return [str(i).strip() for i in (items or []) if str(i).strip()]
 
 
+_SELF_CONTRADICTION = re.compile(
+    r"\b(states?|mentions?|specif(?:ies|ied)|defines?|says?|includes?)\b[^.;]*\bbut\b[^.;]*"
+    r"\b(?:does not|doesn't|did not|not)\b[^.;]*\b(?:specify|specified|define|defined|mention|"
+    r"mentioned|state|stated)\b", re.I)
+
+
+def is_self_contradictory(f: Finding) -> bool:
+    """'The requirement states X, but does not specify X' - a typical small-model false finding."""
+    return bool(_SELF_CONTRADICTION.search(f.observation))
+
+
 def _drop_similar(items: list[Finding], existing: list[Finding], threshold: float = 0.6):
     """Small models often report one issue as both a gap and an ambiguity - keep the first."""
     return [f for f in items
@@ -137,9 +148,12 @@ def analyze(provider: Provider, story: str, domain: str = "General") -> Analysis
         q.id = q.id or f"Q-{i:03d}"
     acs = [a for a in _strings(d.get("acceptance_criteria")) if not is_placeholder(a)]
     acs = [a if a.upper().startswith("AC-") else f"AC-{i}: {a}" for i, a in enumerate(acs, 1)]
-    gaps = _findings(d.get("gaps"), "gap", "GAP")
-    ambiguities = _drop_similar(_findings(d.get("ambiguities"), "ambiguity", "AMB"), gaps)
-    conflicts = _drop_similar(_findings(d.get("conflicts"), "conflict", "CON"),
+    def keep(items: list[Finding]) -> list[Finding]:
+        return [f for f in items if not is_self_contradictory(f)]
+
+    gaps = keep(_findings(d.get("gaps"), "gap", "GAP"))
+    ambiguities = _drop_similar(keep(_findings(d.get("ambiguities"), "ambiguity", "AMB")), gaps)
+    conflicts = _drop_similar(keep(_findings(d.get("conflicts"), "conflict", "CON")),
                               gaps + ambiguities)
     a = Analysis(
         summary=str(d.get("summary", "")).strip(),

@@ -114,7 +114,12 @@ def build(state: State | None = None) -> State:
         if a.dependencies:
             with ui.expansion("External dependencies", icon="hub").classes("w-full"):
                 for d in a.dependencies:
-                    ui.label(f"{d.system}: {d.purpose} ({d.interface}) - {d.qa_considerations}")
+                    text = f"{d.system}: {d.purpose}".strip(": ")
+                    if d.interface:
+                        text += f" ({d.interface})"
+                    if d.qa_considerations:
+                        text += f" - {d.qa_considerations}"
+                    ui.label(text)
 
     @ui.refreshable
     def clarify_view():
