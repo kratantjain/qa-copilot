@@ -14,7 +14,7 @@ Built by **Kratant** - 7 years across QA automation, CI/CD orchestration and int
 - **Multi-provider LLMs:** Ollama (local), Anthropic, any OpenAI-compatible server, plus an offline mock for tests and demos.
 - **Exports:** Markdown report, CSV, Excel (4 sheets), Gherkin `.feature`, pytest skeleton, Jira/Xray CSV, JSON.
 - **Interfaces:** NiceGUI web UI and a CLI for CI pipelines. SQLite run history.
-- **Quality:** 24 tests, ruff, GitHub Actions CI, Dockerfile.
+- **Quality:** 29 tests, ruff, GitHub Actions CI, Dockerfile.
 
 ## Quick start
 

@@ -162,3 +162,57 @@ def test_automatable_is_decided_in_code():
     s = generate(MockProvider(), STORY, spec={"Positive": 1, "Accessibility": 1})
     by_cat = {c.category: c.automatable for c in s.test_cases}
     assert by_cat[Category.POSITIVE] is True and by_cat[Category.ACCESSIBILITY] is False
+
+
+def test_near_duplicates_are_removed():
+    a = TestCase(scenario="Customer selects credit card for payment", test_data="credit_card",
+                 steps=["Navigate to payment page", "Select Credit Card", "Proceed"])
+    b = TestCase(scenario="Customer selects credit card payment method", test_data="credit_card",
+                 steps=["Navigate to payment page", "Select Credit Card", "Proceed"])
+    c = TestCase(scenario="Pay with expired card is rejected", test_data="exp 01/20",
+                 steps=["Open checkout", "Enter expired card", "Submit"])
+    assert [x.scenario for x in dedupe([a, b, c])] == [a.scenario, c.scenario]
+    # same text in a different category is a different test
+    d = TestCase(scenario=a.scenario, test_data=a.test_data, steps=a.steps, category="Negative")
+    assert len(dedupe([a, d])) == 2
+
+
+def test_duplicate_findings_and_id_only_notes_are_dropped():
+    gap = {"id": "GAP-001", "title": "Payment methods not specified",
+           "observation": "Unclear if other methods exist"}
+    amb = {"id": "AMB-001", "title": "Payment methods not specified",
+           "observation": "Unclear if other methods exist"}
+    p = MockProvider(responses=[json.dumps({"gaps": [gap], "ambiguities": [amb]})])
+    a = analyze(p, STORY)
+    assert len(a.gaps) == 1 and a.ambiguities == []
+    p = MockProvider(responses=[json.dumps({"test_cases": [{"scenario": "Pay by Visa"}],
+                                            "gaps": ["GAP-001", "Refund policy unclear"]})] * 4)
+    s = generate(p, STORY, spec={"Positive": 1})
+    assert s.gaps == ["Refund policy unclear"]
+
+
+def test_top_up_requests_missing_categories():
+    first = {"test_cases": [{"category": "Positive", "scenario": "Pay by Visa", "steps": ["a"]}]}
+    second = {"test_cases": [{"category": "Edge Case", "scenario": "Cart emptied mid payment",
+                              "steps": ["b"]}]}
+    p = MockProvider(responses=[json.dumps(first), json.dumps(second)])
+    s = generate(p, STORY, spec={"Positive": 1, "Edge Case": 1})
+    assert {c.category for c in s.test_cases} == {Category.POSITIVE, Category.EDGE}
+    assert "ALREADY WRITTEN" in p.calls[1][1]
+
+
+def test_report_flags_missing_categories(analysis):
+    from qa_copilot.models import Suite
+    s = Suite(story=STORY, test_cases=[TestCase(scenario="Pay by Visa")])
+    md, _ = export("md", s, analysis)
+    assert b"Missing categories" in md
+
+
+def test_similar_but_distinct_cases_are_kept():
+    def case(sc, data, step):
+        return TestCase(scenario=sc, test_data=data,
+                        steps=["Navigate to payment page", step, "Proceed to payment"])
+    cards = [case("Customer selects credit card for payment", "credit_card", "Select 'Credit Card'"),
+             case("Customer selects gift card for payment", "gift_card", "Select 'Gift Card'"),
+             case("Customer selects credit card payment method", "credit_card", "Select 'Credit Card'")]
+    assert [c.test_data for c in dedupe(cards)] == ["credit_card", "gift_card"]

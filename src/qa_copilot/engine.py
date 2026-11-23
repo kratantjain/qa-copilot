@@ -1,6 +1,7 @@
 """Core orchestration: analyse -> clarify -> generate."""
 from __future__ import annotations
 
+import re
 from typing import Callable
 
 from .json_utils import extract_json
@@ -76,6 +77,13 @@ def _strings(items) -> list[str]:
     return [str(i).strip() for i in (items or []) if str(i).strip()]
 
 
+def _drop_similar(items: list[Finding], existing: list[Finding], threshold: float = 0.6):
+    """Small models often report one issue as both a gap and an ambiguity - keep the first."""
+    return [f for f in items
+            if not any(similarity(f.title + " " + f.observation, e.title + " " + e.observation)
+                       >= threshold for e in existing)]
+
+
 def readiness(a: Analysis) -> tuple[int, str]:
     """Deterministic readiness score so results are comparable across models."""
     penalty = 0
@@ -99,11 +107,13 @@ def analyze(provider: Provider, story: str, domain: str = "General") -> Analysis
         q.id = q.id or f"Q-{i:03d}"
     acs = [a for a in _strings(d.get("acceptance_criteria")) if not is_placeholder(a)]
     acs = [a if a.upper().startswith("AC-") else f"AC-{i}: {a}" for i, a in enumerate(acs, 1)]
+    gaps = _findings(d.get("gaps"), "gap", "GAP")
+    ambiguities = _drop_similar(_findings(d.get("ambiguities"), "ambiguity", "AMB"), gaps)
+    conflicts = _drop_similar(_findings(d.get("conflicts"), "conflict", "CON"),
+                              gaps + ambiguities)
     a = Analysis(
         summary=str(d.get("summary", "")).strip(),
-        gaps=_findings(d.get("gaps"), "gap", "GAP"),
-        ambiguities=_findings(d.get("ambiguities"), "ambiguity", "AMB"),
-        conflicts=_findings(d.get("conflicts"), "conflict", "CON"),
+        gaps=gaps, ambiguities=ambiguities, conflicts=conflicts,
         dependencies=_models(d.get("dependencies"), Dependency),
         risks=sorted(_models(d.get("risks"), Risk), key=lambda r: -r.score),
         questions=qs,
@@ -137,14 +147,45 @@ def needs_human(case: TestCase) -> bool:
     return case.category is Category.ACCESSIBILITY or any(h in text for h in _HUMAN_HINTS)
 
 
+def _tokens(text: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def similarity(a: str, b: str) -> float:
+    """Jaccard similarity of word sets (0-1)."""
+    ta, tb = _tokens(a), _tokens(b)
+    return len(ta & tb) / len(ta | tb) if ta and tb else 0.0
+
+
+def _norm(text: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def is_duplicate(a: TestCase, b: TestCase) -> bool:
+    """Same category, same test data, near-identical steps and a similar scenario."""
+    if a.category is not b.category:
+        return False
+    if _norm(a.scenario) == _norm(b.scenario):
+        return True
+    return (_norm(a.test_data) == _norm(b.test_data)
+            and similarity(" ".join(a.steps), " ".join(b.steps)) >= 0.8
+            and similarity(a.scenario, b.scenario) >= 0.5)
+
+
 def dedupe(cases: list[TestCase]) -> list[TestCase]:
-    seen, out = set(), []
+    """Drop exact repeats and near-duplicates (keeps the first occurrence)."""
+    out: list[TestCase] = []
     for c in cases:
-        key = " ".join(c.scenario.lower().split())
-        if key and key not in seen:
-            seen.add(key)
+        if _norm(c.scenario) and not any(is_duplicate(o, c) for o in out):
             out.append(c)
     return out
+
+
+_ID_ONLY = re.compile(r"^[A-Za-z]{2,5}-\d+$")
+
+
+def _clean_notes(items: list[str]) -> list[str]:
+    return sorted({i for i in items if not _ID_ONLY.match(i) and not is_placeholder(i)})
 
 
 def generate(provider: Provider, story: str, analysis: Analysis | None = None,
@@ -190,6 +231,30 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
         assumptions += _strings(d.get("assumptions"))
         gaps += _strings(d.get("gaps"))
     cases = dedupe(cases)
+
+    # One top-up pass for categories that came back short (common with small models).
+    short = {cat: n - sum(c.category.value == cat for c in cases) for cat, n in spec.items()}
+    short = {cat: min(n, 4) for cat, n in short.items() if n > 0}
+    if short:
+        if progress:
+            progress(f"Top-up pass for: {', '.join(short)}")
+        avoid = "\n".join(f"- {c.scenario}" for c in cases)
+        try:
+            d = _call(provider, generate_prompt(story, domain, short, context, avoid), 4096)
+            for raw in d.get("test_cases") or []:
+                if isinstance(raw, dict) and (raw.get("scenario") or raw.get("title")):
+                    raw = {**raw, "scenario": raw.get("scenario") or raw.get("title")}
+                    if is_placeholder(str(raw["scenario"])):
+                        continue
+                    try:
+                        cases.append(pick(TestCase, raw))
+                    except (TypeError, ValueError):
+                        continue
+            assumptions += _strings(d.get("assumptions"))
+            gaps += _strings(d.get("gaps"))
+        except LLMError:
+            pass  # top-up is best effort
+        cases = dedupe(cases)
     for c in cases:
         c.automatable = not needs_human(c)
     if not cases:
@@ -198,5 +263,5 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
     cases.sort(key=lambda c: order.index(c.category))
     for n, c in enumerate(cases, 1):
         c.id = f"TC-{n:03d}"
-    return Suite(story=story, test_cases=cases, assumptions=sorted(set(assumptions)),
-                 gaps=sorted(set(gaps)))
+    return Suite(story=story, test_cases=cases, assumptions=_clean_notes(assumptions),
+                 gaps=_clean_notes(gaps))

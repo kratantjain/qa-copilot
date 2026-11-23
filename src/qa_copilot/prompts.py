@@ -54,8 +54,10 @@ Return JSON with exactly this shape:
 {ANALYSIS_SCHEMA}"""
 
 
-def generate_prompt(story: str, domain: str, spec: dict[str, int], context: str) -> str:
+def generate_prompt(story: str, domain: str, spec: dict[str, int], context: str,
+                    avoid: str = "") -> str:
     lines = "\n".join(f"- {cat}: exactly {n} test cases" for cat, n in spec.items())
+    avoid_block = f"\nALREADY WRITTEN (do not repeat or rephrase these):\n{avoid}\n" if avoid else ""
     return f"""TASK: GENERATE
 DOMAIN: {domain}
 
@@ -64,11 +66,12 @@ REQUIREMENT:
 
 KNOWN CONTEXT (acceptance criteria, findings you may trace to):
 {context or 'none'}
-
+{avoid_block}
 Generate test cases for ONLY these categories:
 {lines}
 
-Rules: distinct, executable cases; 2-5 steps each; concrete test data; observable expected
+Rules: every case must test something different (different data, path or failure mode);
+executable cases; 2-5 steps each; concrete test data; observable expected
 results; set traces_to to the acceptance-criteria / finding ids each case verifies;
 Do not invent business rules.
 Always fill preconditions and test_data with concrete values. Negative cases must expect a

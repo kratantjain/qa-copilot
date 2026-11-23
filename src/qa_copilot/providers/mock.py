@@ -54,12 +54,14 @@ def _cases(prompt: str) -> dict:
     cats = [c for c in ("Positive", "Negative", "Boundary", "Edge Case", "Regression",
                         "Security", "Performance", "Accessibility") if f"- {c}:" in prompt]
     out = []
+    variants = [("pay with Visa", "Visa 4111", ["Add item", "Checkout", "Pay by Visa"]),
+                ("pay with gift card", "GC-100 balance 50", ["Add item", "Apply gift card", "Confirm"])]
     for c in cats or ["Positive"]:
-        for i in range(2):
+        for i, (what, data, steps) in enumerate(variants):
             out.append({"category": c, "area": "Payment",
-                        "scenario": f"{c} scenario {i + 1}: pay for order",
-                        "preconditions": "Cart has items", "test_data": "Visa 4111...",
-                        "steps": ["Add item", "Checkout", "Pay"], "expected": "Order placed",
+                        "scenario": f"{c} scenario {i + 1}: {what}",
+                        "preconditions": "Cart has items", "test_data": data,
+                        "steps": steps, "expected": "Order placed",
                         "priority": "High" if i == 0 else "Medium", "automatable": True,
                         "traces_to": ["AC-1" if i == 0 else "AC-2"]})
     return {"test_cases": out, "assumptions": [], "gaps": []}

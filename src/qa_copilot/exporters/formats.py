@@ -62,6 +62,8 @@ def to_markdown(suite: Suite, analysis: Analysis | None = None) -> str:
     rep = coverage_report(analysis, suite)
     out += ["## Coverage", "", f"- Total test cases: **{rep['total']}**",
             f"- By category: {rep['by_category']}", f"- Automatable: {rep['automatable_pct']}%"]
+    if rep["missing_categories"]:
+        out.append(f"- **Missing categories:** {', '.join(rep['missing_categories'])}")
     if analysis:
         out += [f"- Acceptance-criteria coverage: {rep['ac_coverage_pct']}%",
                 f"- Uncovered items: {', '.join(rep['uncovered']) or 'none'}"]
