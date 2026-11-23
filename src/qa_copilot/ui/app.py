@@ -1,6 +1,8 @@
 """NiceGUI web interface for QA Copilot."""
 from __future__ import annotations
 
+import time
+
 from nicegui import background_tasks, ui
 from nicegui import run as nrun
 
@@ -9,6 +11,7 @@ from ..coverage import coverage_report, traceability
 from ..engine import DEFAULT_SPEC, DOMAINS, analyze, generate, reassess
 from ..exporters import EXPORTERS, export
 from ..history import History
+from ..log import log
 from ..models import Analysis, Category, Suite
 from ..providers import PROVIDERS, LLMError, get_provider
 
@@ -29,6 +32,7 @@ class State:
         self.spec = dict(DEFAULT_SPEC)
         self.history = History(self.settings.db_path)
         self.busy = ""      # label of the running job, "" when idle
+        self.started = 0.0  # time.monotonic() when the running job started
         self.error = ""     # last job error
         self.focus = ""     # tab to show after a job finishes
         self.version = 0    # bumped whenever a job starts/finishes; pages poll this
@@ -38,7 +42,9 @@ class State:
 
     def execute(self, label: str, fn, apply, focus: str = "") -> None:
         """Run a blocking job (call from a worker thread). Never raises."""
-        self.busy, self.error = label, ""
+        self.busy, self.error, self.started = label, "", time.monotonic()
+        log.info("job start: %s (provider=%s model=%s)", label, self.settings.provider,
+                 self.settings.resolved_model)
         try:
             ok, msg = self.provider().health()
             if not ok:
@@ -50,6 +56,8 @@ class State:
         except Exception as e:  # noqa: BLE001 - surface unexpected errors in the UI
             self.error = f"Unexpected error: {e}"
         finally:
+            log.info("job end: %s in %.1fs%s", label, time.monotonic() - self.started,
+                     f" - ERROR: {self.error}" if self.error else "")
             self.busy = ""
             self.version += 1
 
@@ -236,7 +244,7 @@ def build(state: State | None = None) -> State:
         if st.busy:
             ui.notify(f"Already running: {st.busy}", type="warning")
             return
-        st.busy, st.error = label, ""
+        st.busy, st.error, st.started = label, "", time.monotonic()
         st.version += 1
         status_view.refresh()
         # Background task: keeps running (and keeps its result) even if this page reloads.
@@ -266,8 +274,8 @@ def build(state: State | None = None) -> State:
         if st.busy:
             with ui.row().classes("items-center gap-2"):
                 ui.spinner(size="sm")
-                ui.label(st.busy + " (keep this page open or come back, it keeps running)") \
-                    .classes("text-gray-600")
+                ui.label(f"{st.busy} {time.monotonic() - st.started:.0f}s elapsed "
+                         "(safe to leave and come back - it keeps running)").classes("text-gray-600")
         elif st.error:
             ui.label(st.error).classes("text-red-600")
 
@@ -293,6 +301,8 @@ def build(state: State | None = None) -> State:
 
     def poll():
         """Pick up job results, including ones that finished while this page was reloading."""
+        if st.busy:
+            status_view.refresh()  # live elapsed-time counter
         if seen["v"] == st.version:
             return
         seen["v"] = st.version
@@ -310,6 +320,9 @@ def build(state: State | None = None) -> State:
 
 
 def run(port: int = 8080) -> None:
+    from ..log import setup
+    setup()
+    log.info("QA Copilot UI on http://localhost:%d (provider=%s)", port, get_state().settings.provider)
     @ui.page("/")
     def index():
         build(get_state())

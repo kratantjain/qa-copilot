@@ -298,3 +298,23 @@ def test_long_story_rejected_for_local_model_only(provider):
     with pytest.raises(ValueError, match="Split it"):
         analyze(OllamaProvider("m"), long_story)
     analyze(provider, long_story)  # mock/cloud providers are not limited
+
+
+def test_ollama_logs_timings_and_engine_logs_calls(monkeypatch, caplog):
+    import logging
+
+    import requests
+
+    from qa_copilot.providers.ollama import OllamaProvider
+    payload = {"message": {"content": "{\"summary\": \"ok\"}"}, "done_reason": "stop",
+               "load_duration": 2_000_000_000, "prompt_eval_count": 300,
+               "prompt_eval_duration": 4_000_000_000, "eval_count": 160,
+               "eval_duration": 10_000_000_000, "total_duration": 16_000_000_000}
+    monkeypatch.setattr(requests, "post", lambda url, json, timeout: _Resp(200, payload))
+    p = OllamaProvider("m")
+    with caplog.at_level(logging.INFO, logger="qa_copilot"):
+        analyze(p, STORY)
+    text = caplog.text
+    assert "LLM call ollama" in text and "LLM reply in" in text
+    assert "160 tok in 10.0s (16.0 tok/s)" in text and "load 2.0s" in text
+    assert p.last_stats["gen_tps"] == 16.0

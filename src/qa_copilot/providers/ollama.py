@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import requests
 
+from ..log import log
 from .base import LLMError, Provider
 
 
@@ -15,6 +16,7 @@ class OllamaProvider(Provider):
         self.num_ctx = num_ctx
         self.keep_alive = keep_alive
         self.use_schema = use_schema
+        self.last_stats: dict = {}
 
     def _post(self, system: str, prompt: str, max_tokens: int, fmt) -> requests.Response:
         return requests.post(
@@ -47,10 +49,28 @@ class OllamaProvider(Provider):
             raise LLMError(f"Could not reach Ollama at {self.base_url}: {e}") from e
         if data.get("done_reason") == "length":
             raise LLMError("Output hit the token limit; JSON is likely truncated.")
+        self._log_stats(data)
         text = (data.get("message") or {}).get("content", "")
         if not text.strip():
             raise LLMError("Ollama returned an empty response.")
         return text
+
+    def _log_stats(self, data: dict) -> None:
+        """Log Ollama's own timings so slow runs can be diagnosed (load vs prompt vs generation)."""
+        ns = 1e9
+        gen, gen_s = data.get("eval_count", 0), data.get("eval_duration", 0) / ns
+        self.last_stats = {
+            "load_s": data.get("load_duration", 0) / ns,
+            "prompt_tokens": data.get("prompt_eval_count", 0),
+            "prompt_s": data.get("prompt_eval_duration", 0) / ns,
+            "gen_tokens": gen, "gen_s": gen_s,
+            "gen_tps": gen / gen_s if gen_s else 0.0,
+            "total_s": data.get("total_duration", 0) / ns,
+        }
+        st = self.last_stats
+        log.info("ollama: load %.1fs | prompt %d tok in %.1fs | generated %d tok in %.1fs "
+                 "(%.1f tok/s) | total %.1fs", st["load_s"], st["prompt_tokens"], st["prompt_s"],
+                 gen, gen_s, st["gen_tps"], st["total_s"])
 
     def health(self) -> tuple[bool, str]:
         try:

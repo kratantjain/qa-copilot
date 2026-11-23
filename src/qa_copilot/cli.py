@@ -9,6 +9,7 @@ from . import __version__
 from .config import Settings
 from .engine import DEFAULT_SPEC, DOMAINS, analyze, generate
 from .exporters import EXPORTERS, export
+from .log import setup as setup_logging
 from .providers import PROVIDERS, LLMError, get_provider
 
 
@@ -58,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    setup_logging()
     if args.cmd == "ui":
         from .ui.app import run
         run(port=args.port)

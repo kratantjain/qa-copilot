@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Callable
 
 from .json_utils import extract_json
+from .log import log
 from .models import (
     Analysis,
     Category,
@@ -42,11 +44,17 @@ def _call(provider: Provider, prompt: str, max_tokens: int, retries: int = 1,
     """Call the LLM and parse JSON, retrying once with a repair hint."""
     last: Exception | None = None
     for attempt in range(retries + 1):
+        log.info("LLM call %s (attempt %d): prompt %d chars, max %d tokens, schema=%s",
+                 provider.name, attempt + 1, len(prompt), max_tokens, bool(schema))
+        t0 = time.monotonic()
         p = prompt if attempt == 0 else prompt + "\n\nYour previous reply was not valid JSON. " \
             "Reply again with ONLY the JSON object."
         try:
-            return extract_json(provider.complete(SYSTEM, p, max_tokens, schema))
+            text = provider.complete(SYSTEM, p, max_tokens, schema)
+            log.info("LLM reply in %.1fs (%d chars)", time.monotonic() - t0, len(text))
+            return extract_json(text)
         except LLMError as e:
+            log.warning("LLM call failed after %.1fs: %s", time.monotonic() - t0, e)
             last = e
     raise LLMError(str(last))
 
