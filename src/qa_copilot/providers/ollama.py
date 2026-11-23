@@ -3,7 +3,7 @@ from __future__ import annotations
 import requests
 
 from ..log import log
-from .base import LLMError, Provider
+from .base import LLMError, LLMTruncated, Provider
 
 
 class OllamaProvider(Provider):
@@ -53,10 +53,10 @@ class OllamaProvider(Provider):
             raise LLMError("Ollama timed out - is the model loaded?") from e
         except requests.RequestException as e:
             raise LLMError(f"Could not reach Ollama at {self.base_url}: {e}") from e
-        if data.get("done_reason") == "length":
-            raise LLMError("Output hit the token limit; JSON is likely truncated.")
         self._log_stats(data)
         text = (data.get("message") or {}).get("content", "")
+        if data.get("done_reason") == "length":
+            raise LLMTruncated("Output hit the token limit; JSON is likely truncated.", text)
         if not text.strip():
             raise LLMError("Ollama returned an empty response.")
         return text

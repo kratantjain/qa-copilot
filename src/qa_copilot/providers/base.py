@@ -7,6 +7,14 @@ class LLMError(RuntimeError):
     """Raised for any provider failure (network, auth, bad output)."""
 
 
+class LLMTruncated(LLMError):
+    """The model hit the token limit; ``text`` holds the partial output."""
+
+    def __init__(self, message: str, text: str = ""):
+        super().__init__(message)
+        self.text = text
+
+
 class Provider(ABC):
     name = "base"
 

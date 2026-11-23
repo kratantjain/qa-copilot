@@ -28,3 +28,38 @@ def extract_json(text: str) -> dict:
     if not isinstance(data, dict):
         raise LLMError("Expected a JSON object.")
     return data
+
+
+def salvage_json(text: str) -> dict:
+    """Recover the complete items from truncated JSON by closing open brackets.
+
+    Tries progressively earlier cut points (just after a ``}``) until the repaired text parses.
+    """
+    start = text.find("{")
+    if start == -1:
+        raise LLMError("No JSON to salvage.")
+    text = text[start:]
+    cuts = [i + 1 for i, ch in enumerate(text) if ch == "}"]
+    for cut in reversed(cuts[-40:]):
+        head, stack, in_str, esc = text[:cut], [], False, False
+        for ch in head:
+            if in_str:
+                esc = (ch == "\\") and not esc
+                if ch == '"' and not esc:
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch in "{[":
+                stack.append("}" if ch == "{" else "]")
+            elif ch in "}]" and stack:
+                stack.pop()
+        if in_str:
+            continue
+        try:
+            data = json.loads(re.sub(r",\s*$", "", head) + "".join(reversed(stack)))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            return data
+    raise LLMError("Could not salvage truncated JSON.")

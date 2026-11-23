@@ -5,7 +5,7 @@ import re
 import time
 from typing import Callable
 
-from .json_utils import extract_json
+from .json_utils import extract_json, salvage_json
 from .log import log
 from .models import (
     Analysis,
@@ -28,10 +28,11 @@ from .prompts import (
     reassess_prompt,
 )
 from .providers import LLMError, Provider
+from .providers.base import LLMTruncated
 
 DEFAULT_SPEC = {"Positive": 3, "Negative": 3, "Boundary": 2, "Edge Case": 2, "Regression": 2}
 ANALYSIS_TOKENS = 1536
-CASE_TOKENS = 2048
+CASE_TOKENS = 1400
 BATCH_SIZE = 6  # test cases per LLM call
 MAX_LOCAL_STORY_CHARS = 6000  # keeps prompt + output inside a 4k context window
 DOMAINS = ("General", "E-commerce / Retail", "Payments / Fintech", "Healthcare", "Embedded / Devices",
@@ -53,6 +54,15 @@ def _call(provider: Provider, prompt: str, max_tokens: int, retries: int = 1,
             text = provider.complete(SYSTEM, p, max_tokens, schema)
             log.info("LLM reply in %.1fs (%d chars)", time.monotonic() - t0, len(text))
             return extract_json(text)
+        except LLMTruncated as e:
+            log.warning("LLM output truncated after %.1fs; salvaging complete items", time.monotonic() - t0)
+            try:
+                data = salvage_json(e.text)
+                if any(data.values()):
+                    return data
+            except LLMError:
+                pass
+            last = e
         except LLMError as e:
             log.warning("LLM call failed after %.1fs: %s", time.monotonic() - t0, e)
             last = e

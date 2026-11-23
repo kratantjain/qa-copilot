@@ -364,3 +364,27 @@ def test_self_contradictory_findings_are_dropped():
     p = MockProvider(responses=[json.dumps(payload)])
     a = analyze(p, STORY)
     assert [g.title for g in a.gaps] == ["B"]
+
+
+def test_salvage_json_keeps_complete_cases_from_truncated_output():
+    from qa_copilot.json_utils import salvage_json
+    cut = '{"test_cases": [{"scenario": "a", "steps": ["x"]}, {"scenario": "b"}, {"scenario": "c", "ste'
+    data = salvage_json(cut)
+    assert [c["scenario"] for c in data["test_cases"]] == ["a", "b"]
+
+
+def test_truncated_reply_is_salvaged_without_retry():
+    from qa_copilot.engine import _call
+    from qa_copilot.providers.base import LLMTruncated, Provider
+
+    class Cut(Provider):
+        name = "cut"
+        calls = 0
+
+        def complete(self, system, prompt, max_tokens=2048, schema=None):
+            Cut.calls += 1
+            raise LLMTruncated("limit", '{"test_cases": [{"scenario": "a"}, {"scenario": "b", "st')
+
+    out = _call(Cut("m"), "p", 100)
+    assert out["test_cases"] == [{"scenario": "a"}]
+    assert Cut.calls == 1
