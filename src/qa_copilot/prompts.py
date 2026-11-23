@@ -28,7 +28,6 @@ CASE_SCHEMA = """{
     "steps": ["<action 1>", "<action 2>"],
     "expected": "<observable expected result>",
     "priority": "High|Medium|Low",
-    "automatable": true,
     "traces_to": ["AC-1", "GAP-001"]
   }],
   "assumptions": [], "gaps": []
@@ -71,7 +70,7 @@ Generate test cases for ONLY these categories:
 
 Rules: distinct, executable cases; 2-5 steps each; concrete test data; observable expected
 results; set traces_to to the acceptance-criteria / finding ids each case verifies;
-automatable=false only when human judgement is required. Do not invent business rules.
+Do not invent business rules.
 Always fill preconditions and test_data with concrete values. Negative cases must expect a
 rejection, error or blocked action - never a successful outcome. Boundary cases must name the
 boundary value. Angle-bracket text in the schema is a placeholder; never copy it.

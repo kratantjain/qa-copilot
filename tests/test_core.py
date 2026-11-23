@@ -152,3 +152,13 @@ def test_placeholder_text_is_filtered():
     a = analyze(p, STORY)
     assert a.acceptance_criteria == ["AC-1: Orders need payment"]
     assert a.readiness_score <= 100
+
+
+def test_automatable_is_decided_in_code():
+    from qa_copilot.engine import needs_human
+    assert not needs_human(TestCase(scenario="Pay by card", steps=["Pay"], expected="Order placed"))
+    assert needs_human(TestCase(scenario="Check visual appearance of checkout"))
+    assert needs_human(TestCase(scenario="Alt text", category="accessibility"))
+    s = generate(MockProvider(), STORY, spec={"Positive": 1, "Accessibility": 1})
+    by_cat = {c.category: c.automatable for c in s.test_cases}
+    assert by_cat[Category.POSITIVE] is True and by_cat[Category.ACCESSIBILITY] is False

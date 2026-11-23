@@ -127,6 +127,16 @@ def reassess(provider: Provider, story: str, analysis: Analysis, answers: str) -
         updated_story=str(d.get("updated_story", "") or "").strip())
 
 
+_HUMAN_HINTS = ("visual", "look and feel", "appearance", "usability", "aesthetic", "readab",
+                "screen reader", "subjective", "manually verify", "color contrast", "colour")
+
+
+def needs_human(case: TestCase) -> bool:
+    """Deterministic automatable/manual call - small LLMs set this flag unreliably."""
+    text = " ".join([case.scenario, case.expected, *case.steps]).lower()
+    return case.category is Category.ACCESSIBILITY or any(h in text for h in _HUMAN_HINTS)
+
+
 def dedupe(cases: list[TestCase]) -> list[TestCase]:
     seen, out = set(), []
     for c in cases:
@@ -180,6 +190,8 @@ def generate(provider: Provider, story: str, analysis: Analysis | None = None,
         assumptions += _strings(d.get("assumptions"))
         gaps += _strings(d.get("gaps"))
     cases = dedupe(cases)
+    for c in cases:
+        c.automatable = not needs_human(c)
     if not cases:
         raise LLMError("No usable test cases were generated.")
     order = list(Category)
