@@ -239,7 +239,7 @@ def test_ollama_uses_schema_keep_alive_and_small_context(monkeypatch):
     from qa_copilot.providers.ollama import OllamaProvider
     sent = []
     monkeypatch.setattr(requests, "post", lambda url, json, timeout: sent.append(json) or _Resp())
-    OllamaProvider("m", num_ctx=4096).complete("sys", "hi", 512, CASES_JSON_SCHEMA)
+    OllamaProvider("m", num_ctx=4096, use_schema=True).complete("sys", "hi", 512, CASES_JSON_SCHEMA)
     body = sent[0]
     assert body["format"] == CASES_JSON_SCHEMA
     assert body["keep_alive"] == "30m" and body["options"]["num_ctx"] == 4096
@@ -256,10 +256,10 @@ def test_ollama_falls_back_to_plain_json_when_schema_rejected(monkeypatch):
         sent.append(json["format"])
         return _Resp(400) if isinstance(json["format"], dict) else _Resp()
     monkeypatch.setattr(requests, "post", fake_post)
-    OllamaProvider("m").complete("s", "p", 100, {"type": "object"})
+    OllamaProvider("m", use_schema=True).complete("s", "p", 100, {"type": "object"})
     assert sent == [{"type": "object"}, "json"]
     sent.clear()
-    OllamaProvider("m", use_schema=False).complete("s", "p", 100, {"type": "object"})
+    OllamaProvider("m").complete("s", "p", 100, {"type": "object"})  # default: plain JSON mode
     assert sent == ["json"]
 
 
@@ -327,3 +327,11 @@ def test_ollama_404_gives_actionable_message(monkeypatch):
     monkeypatch.setattr(requests, "post", lambda url, json, timeout: _Resp(404))
     with pytest.raises(LLMError, match="ollama pull llama3.2:1b"):
         OllamaProvider("llama3.2:1b").complete("s", "p")
+
+
+def test_schema_mode_is_opt_in(monkeypatch):
+    from qa_copilot.config import Settings
+    monkeypatch.delenv("QA_COPILOT_OLLAMA_SCHEMA", raising=False)
+    assert Settings().ollama_schema is False
+    monkeypatch.setenv("QA_COPILOT_OLLAMA_SCHEMA", "1")
+    assert Settings().ollama_schema is True

@@ -10,7 +10,7 @@ class OllamaProvider(Provider):
     name = "ollama"
 
     def __init__(self, model: str, base_url: str = "http://localhost:11434", num_ctx: int = 4096,
-                 keep_alive: str = "30m", use_schema: bool = True, **kw):
+                 keep_alive: str = "30m", use_schema: bool = False, **kw):
         super().__init__(model, **kw)
         self.base_url = base_url.rstrip("/")
         self.num_ctx = num_ctx

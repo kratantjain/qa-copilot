@@ -16,7 +16,7 @@ class Settings:
     temperature: float = 0.1
     num_ctx: int = field(default_factory=lambda: int(os.getenv("QA_COPILOT_NUM_CTX", "4096")))
     ollama_schema: bool = field(
-        default_factory=lambda: os.getenv("QA_COPILOT_OLLAMA_SCHEMA", "1") != "0")
+        default_factory=lambda: os.getenv("QA_COPILOT_OLLAMA_SCHEMA", "0") == "1")
     db_path: str = field(default_factory=lambda: os.getenv("QA_COPILOT_DB", ".qa_copilot/history.db"))
 
     DEFAULT_MODELS = {
