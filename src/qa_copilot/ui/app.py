@@ -1,8 +1,8 @@
 """NiceGUI web interface for QA Copilot."""
 from __future__ import annotations
 
+from nicegui import background_tasks, ui
 from nicegui import run as nrun
-from nicegui import ui
 
 from ..config import Settings
 from ..coverage import coverage_report, traceability
@@ -16,6 +16,9 @@ PRIO_COLOR = {"High": "negative", "Medium": "warning", "Low": "positive"}
 
 
 class State:
+    """Single-user app state. Shared across page loads so a browser reload (e.g. the mobile
+    browser being backgrounded) never loses the requirement or the results."""
+
     def __init__(self):
         self.settings = Settings()
         self.story = ""
@@ -25,9 +28,40 @@ class State:
         self.rounds: list = []
         self.spec = dict(DEFAULT_SPEC)
         self.history = History(self.settings.db_path)
+        self.busy = ""      # label of the running job, "" when idle
+        self.error = ""     # last job error
+        self.focus = ""     # tab to show after a job finishes
+        self.version = 0    # bumped whenever a job starts/finishes; pages poll this
 
     def provider(self):
         return get_provider(self.settings)
+
+    def execute(self, label: str, fn, apply, focus: str = "") -> None:
+        """Run a blocking job (call from a worker thread). Never raises."""
+        self.busy, self.error = label, ""
+        try:
+            ok, msg = self.provider().health()
+            if not ok:
+                raise LLMError(msg)
+            apply(fn())
+            self.focus = focus
+        except (LLMError, ValueError) as e:
+            self.error = str(e)
+        except Exception as e:  # noqa: BLE001 - surface unexpected errors in the UI
+            self.error = f"Unexpected error: {e}"
+        finally:
+            self.busy = ""
+            self.version += 1
+
+
+_STATE: State | None = None
+
+
+def get_state() -> State:
+    global _STATE
+    if _STATE is None:
+        _STATE = State()
+    return _STATE
 
 
 def build(state: State | None = None) -> State:
@@ -198,43 +232,50 @@ def build(state: State | None = None) -> State:
                             on_change=lambda e: setattr(st, "story", e.value)).classes("w-full") \
         .props("autogrow outlined")
 
-    async def guarded(fn, *args):
-        ok, msg = st.provider().health()
-        if not ok:
-            ui.notify(msg, type="negative", multi_line=True)
-            return None
-        try:
-            return await nrun.io_bound(fn, *args)
-        except (LLMError, ValueError) as e:
-            ui.notify(str(e), type="negative", multi_line=True)
-            return None
+    def launch(label: str, fn, apply, focus: str) -> None:
+        if st.busy:
+            ui.notify(f"Already running: {st.busy}", type="warning")
+            return
+        st.busy, st.error = label, ""
+        st.version += 1
+        status_view.refresh()
+        # Background task: keeps running (and keeps its result) even if this page reloads.
+        background_tasks.create(nrun.io_bound(st.execute, label, fn, apply, focus))
 
-    async def do_analyze():
-        n = ui.notification("Analysing requirement...", spinner=True, timeout=None)
-        res = await guarded(analyze, st.provider(), st.story, st.domain)
-        n.dismiss()
-        if res:
+    def do_analyze():
+        provider, story, domain = st.provider(), st.story, st.domain
+
+        def apply(res):
             st.analysis = res
-            st.history.save(st.story, st.analysis, st.suite)
-            analysis_view.refresh()
-            clarify_view.refresh()
-            history_view.refresh()
-            tabs.set_value("Analysis")
+            st.history.save(story, st.analysis, st.suite)
+        launch("Analysing requirement...", lambda: analyze(provider, story, domain), apply,
+               "Analysis")
 
-    async def do_generate():
-        n = ui.notification("Generating test cases...", spinner=True, timeout=None)
-        res = await guarded(generate, st.provider(), st.story, st.analysis, st.domain, dict(st.spec))
-        n.dismiss()
-        if res:
+    def do_generate():
+        provider, story, domain = st.provider(), st.story, st.domain
+        analysis, spec = st.analysis, dict(st.spec)
+
+        def apply(res):
             st.suite = res
-            st.history.save(st.story, st.analysis, st.suite)
-            suite_view.refresh()
-            history_view.refresh()
-            tabs.set_value("Test cases")
+            st.history.save(story, st.analysis, st.suite)
+        launch("Generating test cases...",
+               lambda: generate(provider, story, analysis, domain, spec), apply, "Test cases")
+
+    @ui.refreshable
+    def status_view():
+        if st.busy:
+            with ui.row().classes("items-center gap-2"):
+                ui.spinner(size="sm")
+                ui.label(st.busy + " (keep this page open or come back, it keeps running)") \
+                    .classes("text-gray-600")
+        elif st.error:
+            ui.label(st.error).classes("text-red-600")
 
     with ui.row().classes("gap-2"):
         ui.button("Analyse requirement", on_click=do_analyze, icon="search")
         ui.button("Generate test cases", on_click=do_generate, icon="playlist_add_check")
+
+    status_view()
 
     with ui.tabs().classes("w-full") as tabs:
         ui.tab("Analysis")
@@ -247,15 +288,34 @@ def build(state: State | None = None) -> State:
             clarify_view()
         with ui.tab_panel("Test cases"):
             suite_view()
+
+    seen = {"v": st.version}
+
+    def poll():
+        """Pick up job results, including ones that finished while this page was reloading."""
+        if seen["v"] == st.version:
+            return
+        seen["v"] = st.version
+        status_view.refresh()
+        analysis_view.refresh()
+        clarify_view.refresh()
+        suite_view.refresh()
+        history_view.refresh()
+        if st.focus:
+            tabs.set_value(st.focus)
+            st.focus = ""
+
+    ui.timer(1.0, poll)
     return st
 
 
 def run(port: int = 8080) -> None:
     @ui.page("/")
     def index():
-        build()
+        build(get_state())
 
-    ui.run(port=port, title="QA Copilot", reload=False, show=False)
+    # Long reconnect window: mobile browsers drop the websocket whenever they are backgrounded.
+    ui.run(port=port, title="QA Copilot", reload=False, show=False, reconnect_timeout=600)
 
 
 if __name__ in {"__main__", "__mp_main__"}:
