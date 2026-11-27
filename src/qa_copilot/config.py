@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 class Settings:
     provider: str = field(default_factory=lambda: os.getenv("QA_COPILOT_PROVIDER", "ollama"))
     model: str = field(default_factory=lambda: os.getenv("QA_COPILOT_MODEL", ""))
-    ollama_url: str = field(default_factory=lambda: os.getenv("OLLAMA_URL", "http://localhost:11434"))
+    ollama_url: str = field(default_factory=lambda: os.getenv("OLLAMA_URL", "http://127.0.0.1:11434"))
     openai_base_url: str = field(
         default_factory=lambda: os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     timeout: int = field(default_factory=lambda: int(os.getenv("QA_COPILOT_TIMEOUT", "600")))

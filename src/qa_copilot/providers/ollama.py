@@ -9,7 +9,7 @@ from .base import LLMError, LLMTruncated, Provider
 class OllamaProvider(Provider):
     name = "ollama"
 
-    def __init__(self, model: str, base_url: str = "http://localhost:11434", num_ctx: int = 4096,
+    def __init__(self, model: str, base_url: str = "http://127.0.0.1:11434", num_ctx: int = 4096,
                  keep_alive: str = "30m", use_schema: bool = False, **kw):
         super().__init__(model, **kw)
         self.base_url = base_url.rstrip("/")
